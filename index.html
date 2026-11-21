@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF 圖層與縮放檢視器</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+      display: flex;
+      height: 100vh;
+      background: #f0f2f5;
+      color: #222;
+    }
+    #sidebar {
+      width: 270px;
+      background: #ffffff;
+      border-right: 1px solid #d9dee7;
+      padding: 14px;
+      overflow-y: auto;
+    }
+    #sidebar h2 {
+      margin: 0 0 10px;
+      font-size: 17px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+    .layer-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 4px;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .layer-item:hover { background: #f5f7fa; }
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #toolbar {
+      background: #ffffff;
+      border-bottom: 1px solid #d9dee7;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    button {
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      border-radius: 6px;
+    }
+    button:hover { background: #f1f5f9; }
+    #viewer-container {
+      flex: 1;
+      overflow: auto;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+    canvas {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <aside id="sidebar">
+    <h2>圖層 (Layers)</h2>
+    <div id="layers-list">正在載入 PDF 與圖層...</div>
+  </aside>
+
+  <section id="main">
+    <div id="toolbar">
+      <button id="zoom-out">縮小 (-)</button>
+      <span id="zoom-label">100%</span>
+      <button id="zoom-in">放大 (+)</button>
+      <button id="zoom-reset">重設 100%</button>
+    </div>
+    <div id="viewer-container">
+      <canvas id="pdf-canvas"></canvas>
+    </div>
+  </section>
+
+  <script type="module">
+    import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';
+
+    const PDF_URL = './chart.pdf';
+
+    let pdfDoc = null;
+    let scale = 1.0;
+    let optionalContentConfig = null;
+    let renderTask = null;
+
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    const layersListEl = document.getElementById('layers-list');
+    const zoomLabelEl = document.getElementById('zoom-label');
+
+    async function renderLayersUI() {
+      layersListEl.innerHTML = '';
+      if (!optionalContentConfig) {
+        layersListEl.textContent = '此 PDF 未包含圖層資訊';
+        return;
+      }
+
+      const groups = optionalContentConfig.getGroups();
+      if (!groups || Object.keys(groups).length === 0) {
+        layersListEl.textContent = '找不到可用圖層';
+        return;
+      }
+
+      for (const [groupId, group] of Object.entries(groups)) {
+        const label = document.createElement('label');
+        label.className = 'layer-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = optionalContentConfig.isVisible(groupId);
+
+        checkbox.addEventListener('change', async () => {
+          optionalContentConfig.setVisibility(groupId, checkbox.checked);
+          await renderPage();
+        });
+
+        const text = document.createElement('span');
+        text.textContent = group.name || groupId;
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        layersListEl.appendChild(label);
+      }
+    }
+
+    async function renderPage() {
+      if (!pdfDoc) return;
+      if (renderTask) renderTask.cancel();
+
+      const page = await pdfDoc.getPage(1);
+      const viewport = page.getViewport({ scale });
+
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      zoomLabelEl.textContent = `${Math.round(scale * 100)}%`;
+
+      renderTask = page.render({
+        canvasContext: ctx,
+        viewport,
+        optionalContentConfigPromise: Promise.resolve(optionalContentConfig),
+      });
+
+      try {
+        await renderTask.promise;
+      } catch (err) {
+        if (err?.name !== 'RenderingCancelledException') {
+          console.error(err);
+        }
+      }
+    }
+
+    document.getElementById('zoom-in').addEventListener('click', async () => {
+      scale = Math.min(4.0, +(scale + 0.25).toFixed(2));
+      await renderPage();
+    });
+
+    document.getElementById('zoom-out').addEventListener('click', async () => {
+      scale = Math.max(0.25, +(scale - 0.25).toFixed(2));
+      await renderPage();
+    });
+
+    document.getElementById('zoom-reset').addEventListener('click', async () => {
+      scale = 1.0;
+      await renderPage();
+    });
+
+    async function init() {
+      try {
+        pdfDoc = await pdfjsLib.getDocument(PDF_URL).promise;
+        optionalContentConfig = await pdfDoc.getOptionalContentConfig();
+        await renderLayersUI();
+        await renderPage();
+      } catch (err) {
+        layersListEl.textContent = '載入失敗，請確認 chart.pdf 是否與 index.html 在同一層。';
+        console.error(err);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
