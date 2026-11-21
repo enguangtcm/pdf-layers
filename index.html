@@ -52,6 +52,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      flex-wrap: wrap;
       flex-shrink: 0;
     }
     button {
@@ -63,7 +64,7 @@
       border-radius: 6px;
     }
     button:hover { background: #f1f5f9; }
-    /* 改為標準捲動區塊，以左上角為起點 */
+    /* 以左上角為放大起點 */
     #viewer-container {
       flex: 1;
       overflow: auto;
@@ -89,6 +90,7 @@
       <button id="zoom-out">縮小 (-)</button>
       <span id="zoom-label">100%</span>
       <button id="zoom-in">放大 (+)</button>
+      <button id="zoom-150">150%</button>
       <button id="zoom-reset">重設 100%</button>
     </div>
     <div id="viewer-container">
@@ -117,7 +119,6 @@
     const zoomLabelEl = document.getElementById('zoom-label');
     const viewerContainerEl = document.getElementById('viewer-container');
 
-    // 取出圖層名稱開頭的數字（支援全形與半形數字）
     function extractLeadingNumber(name) {
       const normalized = String(name || '')
         .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
@@ -126,7 +127,6 @@
       return match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
     }
 
-    // 判斷是否為要隱藏的圖層
     function isHiddenLayer(name) {
       const num = extractLeadingNumber(name);
       return HIDDEN_NUMBERS.includes(num);
@@ -145,7 +145,6 @@
         return;
       }
 
-      // 先將指定的隱藏圖層設為不可見
       for (const [groupId, group] of Object.entries(groups)) {
         const layerName = group.name || groupId;
         if (isHiddenLayer(layerName)) {
@@ -153,7 +152,6 @@
         }
       }
 
-      // 過濾掉隱藏圖層，直接依開頭數字由小到大排序
       const entries = Object.entries(groups)
         .filter(([groupId, group]) => !isHiddenLayer(group.name || groupId))
         .sort((a, b) => {
@@ -199,7 +197,6 @@
       canvas.width = viewport.width;
       zoomLabelEl.textContent = `${Math.round(scale * 100)}%`;
 
-      // 重繪後將捲軸歸零至左上角
       viewerContainerEl.scrollTop = 0;
       viewerContainerEl.scrollLeft = 0;
 
@@ -219,12 +216,17 @@
     }
 
     document.getElementById('zoom-in').addEventListener('click', async () => {
-      scale = Math.min(4.0, +(scale + 0.25).toFixed(2));
+      scale = Math.min(6.0, +(scale + 0.5).toFixed(2));
       await renderPage();
     });
 
     document.getElementById('zoom-out').addEventListener('click', async () => {
-      scale = Math.max(0.25, +(scale - 0.25).toFixed(2));
+      scale = Math.max(0.25, +(scale - 0.5).toFixed(2));
+      await renderPage();
+    });
+
+    document.getElementById('zoom-150').addEventListener('click', async () => {
+      scale = 1.5;
       await renderPage();
     });
 
