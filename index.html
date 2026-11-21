@@ -88,7 +88,7 @@
   <section id="main">
     <div id="toolbar">
       <button id="zoom-out">縮小 (-)</button>
-      <span id="zoom-label">100%</span>
+      <span id="zoom-label">150%</span>
       <button id="zoom-in">放大 (+)</button>
       <button id="zoom-150">150%</button>
       <button id="zoom-reset">重設 100%</button>
@@ -109,7 +109,7 @@
     const HIDDEN_NUMBERS = [90, 16, 54];
 
     let pdfDoc = null;
-    let scale = 1.0;
+    let scale = 1.5; // 預設載入為 150%
     let optionalContentConfig = null;
     let renderTask = null;
 
@@ -124,130 +124,4 @@
         .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
         .trim();
       const match = normalized.match(/^(\d+)/);
-      return match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
-    }
-
-    function isHiddenLayer(name) {
-      const num = extractLeadingNumber(name);
-      return HIDDEN_NUMBERS.includes(num);
-    }
-
-    async function renderLayersUI() {
-      layersListEl.innerHTML = '';
-      if (!optionalContentConfig) {
-        layersListEl.textContent = '此 PDF 未包含圖層資訊';
-        return;
-      }
-
-      const groups = optionalContentConfig.getGroups();
-      if (!groups || Object.keys(groups).length === 0) {
-        layersListEl.textContent = '找不到可用圖層';
-        return;
-      }
-
-      for (const [groupId, group] of Object.entries(groups)) {
-        const layerName = group.name || groupId;
-        if (isHiddenLayer(layerName)) {
-          optionalContentConfig.setVisibility(groupId, false);
-        }
-      }
-
-      const entries = Object.entries(groups)
-        .filter(([groupId, group]) => !isHiddenLayer(group.name || groupId))
-        .sort((a, b) => {
-          const nameA = a[1].name || a[0];
-          const nameB = b[1].name || b[0];
-          const numA = extractLeadingNumber(nameA);
-          const numB = extractLeadingNumber(nameB);
-
-          if (numA !== numB) return numA - numB;
-          return String(nameA).localeCompare(String(nameB), 'zh-Hant');
-        });
-
-      for (const [groupId, group] of entries) {
-        const label = document.createElement('label');
-        label.className = 'layer-item';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = optionalContentConfig.isVisible(groupId);
-
-        checkbox.addEventListener('change', async () => {
-          optionalContentConfig.setVisibility(groupId, checkbox.checked);
-          await renderPage();
-        });
-
-        const text = document.createElement('span');
-        text.textContent = group.name || groupId;
-
-        label.appendChild(checkbox);
-        label.appendChild(text);
-        layersListEl.appendChild(label);
-      }
-    }
-
-    async function renderPage() {
-      if (!pdfDoc) return;
-      if (renderTask) renderTask.cancel();
-
-      const page = await pdfDoc.getPage(1);
-      const viewport = page.getViewport({ scale });
-
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      zoomLabelEl.textContent = `${Math.round(scale * 100)}%`;
-
-      viewerContainerEl.scrollTop = 0;
-      viewerContainerEl.scrollLeft = 0;
-
-      renderTask = page.render({
-        canvasContext: ctx,
-        viewport,
-        optionalContentConfigPromise: Promise.resolve(optionalContentConfig),
-      });
-
-      try {
-        await renderTask.promise;
-      } catch (err) {
-        if (err?.name !== 'RenderingCancelledException') {
-          console.error(err);
-        }
-      }
-    }
-
-    document.getElementById('zoom-in').addEventListener('click', async () => {
-      scale = Math.min(6.0, +(scale + 0.5).toFixed(2));
-      await renderPage();
-    });
-
-    document.getElementById('zoom-out').addEventListener('click', async () => {
-      scale = Math.max(0.25, +(scale - 0.5).toFixed(2));
-      await renderPage();
-    });
-
-    document.getElementById('zoom-150').addEventListener('click', async () => {
-      scale = 1.5;
-      await renderPage();
-    });
-
-    document.getElementById('zoom-reset').addEventListener('click', async () => {
-      scale = 1.0;
-      await renderPage();
-    });
-
-    async function init() {
-      try {
-        pdfDoc = await pdfjsLib.getDocument(PDF_URL).promise;
-        optionalContentConfig = await pdfDoc.getOptionalContentConfig();
-        await renderLayersUI();
-        await renderPage();
-      } catch (err) {
-        layersListEl.textContent = '載入失敗，請確認 chart.pdf 是否與 index.html 在同一層。';
-        console.error(err);
-      }
-    }
-
-    init();
-  </script>
-</body>
-</html>
+      return match ? parseInt(
