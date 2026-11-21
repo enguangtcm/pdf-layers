@@ -99,32 +99,8 @@
 
     const PDF_URL = './chart.pdf';
 
-    // 要完全隱藏的開頭數字（例如 '90', '16', '54'）
-    const HIDDEN_PREFIXES = ['90', '16', '54'];
-
-    // 依數字由小到大排序（0 開始漸漸增大）
-    const LAYER_ORDER = [
-      '0',
-      '01臟層',
-      '02腑層',
-      '03中軸',
-      '04外輪',
-      '05五行所生',
-      '06營衛-表',
-      '07陰陽氣',
-      '08水穀道',
-      '09水道-津液',
-      '10脈道',
-      '11人形',
-      '12人形經絡',
-      '13經絡',
-      '14三焦',
-      '15臟腑別通',
-      '16氣血津液化圖',
-      '53經絡循行',
-      '54大中小陰陽五行圖',
-      '90藥性五行氣味'
-    ];
+    // 要完全隱藏的開頭數字
+    const HIDDEN_NUMBERS = [90, 16, 54];
 
     let pdfDoc = null;
     let scale = 1.0;
@@ -136,21 +112,19 @@
     const layersListEl = document.getElementById('layers-list');
     const zoomLabelEl = document.getElementById('zoom-label');
 
-    // 判斷圖層名稱是否屬於要完全隱藏的開頭數字
-    function isHiddenLayer(name) {
-      const trimmed = String(name || '').trim();
-      return HIDDEN_PREFIXES.some((prefix) => {
-        // 比對開頭數字（例如 "16" 符合 "16氣血津液化圖"，不會誤傷 "160" 若有的話）
-        const match = trimmed.match(/^(\d+)/);
-        if (!match) return false;
-        return parseInt(match[1], 10) === parseInt(prefix, 10);
-      });
+    // 取出圖層名稱開頭的數字（支援全形與半形數字）
+    function extractLeadingNumber(name) {
+      const normalized = String(name || '')
+        .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+        .trim();
+      const match = normalized.match(/^(\d+)/);
+      return match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
     }
 
-    // 取出圖層名稱開頭的數字（例如 "01臟層" -> 1, "90藥性五行氣味" -> 90）
-    function extractLeadingNumber(name) {
-      const match = String(name).trim().match(/^(\d+)/);
-      return match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
+    // 判斷是否為要隱藏的圖層
+    function isHiddenLayer(name) {
+      const num = extractLeadingNumber(name);
+      return HIDDEN_NUMBERS.includes(num);
     }
 
     async function renderLayersUI() {
@@ -166,7 +140,7 @@
         return;
       }
 
-      // 先將指定的隱藏圖層設為不可見（false）
+      // 先將指定的隱藏圖層設為不可見
       for (const [groupId, group] of Object.entries(groups)) {
         const layerName = group.name || groupId;
         if (isHiddenLayer(layerName)) {
@@ -174,24 +148,17 @@
         }
       }
 
-      // 過濾掉隱藏圖層，再依數字由小到大排序
+      // 過濾掉隱藏圖層，直接依開頭數字由小到大排序
       const entries = Object.entries(groups)
         .filter(([groupId, group]) => !isHiddenLayer(group.name || groupId))
         .sort((a, b) => {
           const nameA = a[1].name || a[0];
           const nameB = b[1].name || b[0];
-
-          const idxA = LAYER_ORDER.indexOf(nameA);
-          const idxB = LAYER_ORDER.indexOf(nameB);
-          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-          if (idxA !== -1) return -1;
-          if (idxB !== -1) return 1;
-
           const numA = extractLeadingNumber(nameA);
           const numB = extractLeadingNumber(nameB);
-          if (numA !== numB) return numA - numB;
 
-          return nameA.localeCompare(nameB, 'zh-Hant');
+          if (numA !== numB) return numA - numB;
+          return String(nameA).localeCompare(String(nameB), 'zh-Hant');
         });
 
       for (const [groupId, group] of entries) {
