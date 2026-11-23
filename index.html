@@ -14,28 +14,38 @@
       background: #f0f2f5;
       color: #222;
     }
+    /* 側邊欄寬度可自訂，並支援一鍵收合 */
     #sidebar {
-      width: 270px;
+      width: 220px;
       flex-shrink: 0;
       background: #ffffff;
       border-right: 1px solid #d9dee7;
-      padding: 14px;
+      padding: 12px;
       overflow-y: auto;
+      transition: width 0.2s ease, padding 0.2s ease;
+    }
+    #sidebar.collapsed {
+      width: 0;
+      padding: 0;
+      overflow: hidden;
+      border-right: none;
     }
     #sidebar h2 {
       margin: 0 0 10px;
-      font-size: 17px;
+      font-size: 16px;
       border-bottom: 1px solid #eee;
       padding-bottom: 8px;
+      white-space: nowrap;
     }
     .layer-item {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 4px;
-      font-size: 14px;
+      padding: 5px 4px;
+      font-size: 13.5px;
       cursor: pointer;
       border-radius: 4px;
+      white-space: nowrap;
     }
     .layer-item:hover { background: #f5f7fa; }
     #main {
@@ -48,29 +58,30 @@
     #toolbar {
       background: #ffffff;
       border-bottom: 1px solid #d9dee7;
-      padding: 10px 16px;
+      padding: 8px 12px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
       flex-shrink: 0;
     }
     .toolbar-divider {
       width: 1px;
-      height: 22px;
+      height: 20px;
       background: #d9dee7;
       margin: 0 2px;
     }
     button {
-      padding: 6px 12px;
-      font-size: 14px;
+      padding: 5px 10px;
+      font-size: 13.5px;
       cursor: pointer;
       border: 1px solid #cbd5e1;
       background: #fff;
       border-radius: 6px;
+      white-space: nowrap;
     }
     button:hover { background: #f1f5f9; }
-    /* 以左上角為放大起點 */
+    /* 維持以左上角為放大起點 */
     #viewer-container {
       flex: 1;
       overflow: auto;
@@ -93,6 +104,8 @@
 
   <section id="main">
     <div id="toolbar">
+      <button id="toggle-sidebar">收合圖層</button>
+      <span class="toolbar-divider"></span>
       <button id="zoom-out">縮小 (-)</button>
       <span id="zoom-label">150%</span>
       <button id="zoom-in">放大 (+)</button>
@@ -123,11 +136,18 @@
     let renderTask = null;
     let visibleGroupIds = [];
 
+    const sidebarEl = document.getElementById('sidebar');
+    const toggleSidebarBtn = document.getElementById('toggle-sidebar');
     const canvas = document.getElementById('pdf-canvas');
     const ctx = canvas.getContext('2d');
     const layersListEl = document.getElementById('layers-list');
     const zoomLabelEl = document.getElementById('zoom-label');
     const viewerContainerEl = document.getElementById('viewer-container');
+
+    toggleSidebarBtn.addEventListener('click', () => {
+      const isCollapsed = sidebarEl.classList.toggle('collapsed');
+      toggleSidebarBtn.textContent = isCollapsed ? '展開圖層' : '收合圖層';
+    });
 
     function extractLeadingNumber(name) {
       const normalized = String(name || '')
