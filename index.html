@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PDF 圖層與縮放檢視器</title>
+  <link rel="icon" href="data:," />
+  <title>PDF 圖層、縮放與繪圖檢視器</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -14,7 +15,6 @@
       background: #f0f2f5;
       color: #222;
     }
-    /* 側邊欄寬度可自訂，並支援一鍵收合 */
     #sidebar {
       width: 150px;
       flex-shrink: 0;
@@ -40,9 +40,9 @@
     .layer-item {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       padding: 5px 4px;
-      font-size: 13.5px;
+      font-size: 13px;
       cursor: pointer;
       border-radius: 4px;
       white-space: nowrap;
@@ -55,7 +55,7 @@
       flex-direction: column;
       overflow: hidden;
     }
-    #toolbar {
+    .toolbar {
       background: #ffffff;
       border-bottom: 1px solid #d9dee7;
       padding: 8px 12px;
@@ -65,34 +65,367 @@
       flex-wrap: wrap;
       flex-shrink: 0;
     }
+    .toolbar.draw-bar {
+      border-top: 1px solid #eef2f6;
+      background: #fafbfd;
+    }
+    .toolbar.sticker-bar {
+      border-top: 1px solid #eef2f6;
+      background: #f8fafc;
+    }
     .toolbar-divider {
       width: 1px;
       height: 20px;
       background: #d9dee7;
       margin: 0 2px;
     }
-    button {
-      padding: 5px 10px;
+    button, select, input[type="number"] {
+      padding: 5px 9px;
       font-size: 13.5px;
+      font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
       cursor: pointer;
       border: 1px solid #cbd5e1;
       background: #fff;
       border-radius: 6px;
       white-space: nowrap;
     }
-    button:hover { background: #f1f5f9; }
-    /* 維持以左上角為放大起點 */
+    input[type="number"] {
+      width: 62px;
+      cursor: text;
+    }
+    button:hover:not(:disabled) { background: #f1f5f9; }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    button.active {
+      background: #1d4ed8;
+      color: #fff;
+      border-color: #1d4ed8;
+    }
+    input[type="range"] {
+      width: 82px;
+      vertical-align: middle;
+      cursor: pointer;
+    }
+    .inline-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+    }
+
+    .palette-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .palette-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .palette-swatch-preview {
+      width: 18px;
+      height: 18px;
+      border: 1px solid #64748b;
+      border-radius: 3px;
+      background: #ff0000;
+      display: inline-block;
+    }
+    .palette-popover {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      width: 236px;
+      background: #ffffff;
+      border: 1px solid #94a3b8;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+      border-radius: 4px;
+      padding: 4px;
+      z-index: 100;
+      user-select: none;
+    }
+    .palette-popover.open {
+      display: block;
+    }
+    .palette-auto-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 6px;
+      cursor: pointer;
+      border-radius: 3px;
+      font-size: 13px;
+    }
+    .palette-auto-row:hover { background: #e2e8f0; }
+    .palette-auto-box {
+      width: 18px;
+      height: 18px;
+      background: #ff0000;
+      border: 1px solid #64748b;
+    }
+    .palette-section-title {
+      background: #dde7f5;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: bold;
+      padding: 3px 6px;
+      margin: 4px 0;
+    }
+    .palette-grid-10 {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 3px;
+      padding: 2px 4px;
+    }
+    .palette-shades-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 0 3px;
+      padding: 3px 4px 4px;
+    }
+    .palette-shade-col {
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #cbd5e1;
+    }
+    .palette-cell {
+      width: 100%;
+      height: 16px;
+      border: 1px solid #cbd5e1;
+      cursor: pointer;
+      padding: 0;
+      border-radius: 0;
+    }
+    .palette-shade-col .palette-cell {
+      border: none;
+      height: 14px;
+    }
+    .palette-cell:hover, .palette-cell.active-color {
+      outline: 2px solid #ea580c;
+      outline-offset: -1px;
+      z-index: 2;
+    }
+    .palette-more-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 6px;
+      margin-top: 4px;
+      border-top: 1px solid #e2e8f0;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .palette-more-row:hover { background: #e2e8f0; }
+
+    .sticker-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 6px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .sticker-btn:hover {
+      background: #eff6ff;
+      border-color: #3b82f6;
+    }
     #viewer-container {
       flex: 1;
       overflow: auto;
       padding: 0;
       text-align: left;
     }
-    canvas {
-      display: block;
+    #viewer-container.hand-mode {
+      cursor: grab;
+    }
+    #viewer-container.hand-mode.hand-grabbing {
+      cursor: grabbing;
+      user-select: none;
+    }
+    #canvas-stack {
+      position: relative;
+      display: inline-block;
       margin: 0;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
       background: #fff;
+    }
+    #pdf-canvas {
+      display: block;
+    }
+    #draw-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      touch-action: none;
+      z-index: 3;
+    }
+    #vector-draw-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: visible;
+      z-index: 4;
+    }
+    #vector-draw-layer.drawing-active {
+      pointer-events: auto;
+      touch-action: none;
+    }
+    .vector-shape-group {
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    .vector-shape-group.selected {
+      filter: drop-shadow(0 0 4px rgba(29, 78, 216, 0.85));
+    }
+    #eraser-cursor {
+      display: none;
+      position: absolute;
+      border: 1.5px solid #334155;
+      background: rgba(255, 255, 255, 0.28);
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+      z-index: 9;
+    }
+    #overlay-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 5;
+    }
+    #overlay-layer.text-placing {
+      pointer-events: auto;
+      cursor: text;
+    }
+    .vector-sticker-item {
+      position: absolute;
+      cursor: move;
+      user-select: none;
+      touch-action: none;
+      pointer-events: auto;
+      z-index: 6;
+    }
+    .vector-sticker-item svg {
+      display: block;
+      overflow: visible;
+    }
+    .vector-sticker-item.selected svg {
+      filter: drop-shadow(0 0 4px rgba(29, 78, 216, 0.7));
+    }
+    .sticker-del-badge {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: 3px;
+      background: #dc2626;
+      color: #fff;
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+      z-index: 12;
+    }
+    .vector-sticker-item.selected .sticker-del-badge {
+      display: inline-block;
+    }
+
+    /* 多行、可調長寬、文字距邊界 0.15cm 的文字框 */
+    .floating-text-box {
+      position: absolute;
+      padding: 0.15cm;
+      border: 1px dashed rgba(29, 78, 216, 0.65);
+      background: rgba(255, 255, 255, 0.88);
+      border-radius: 4px;
+      cursor: move;
+      user-select: none;
+      touch-action: none;
+      pointer-events: auto;
+      line-height: 1.3;
+      font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+      font-weight: bold;
+      z-index: 7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow: visible;
+    }
+    .floating-text-box.selected {
+      border: 1.5px solid #1d4ed8;
+      box-shadow: 0 2px 8px rgba(29, 78, 216, 0.25);
+    }
+    .floating-text-content {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .text-resize-handle {
+      display: none;
+      position: absolute;
+      right: -5px;
+      bottom: -5px;
+      width: 11px;
+      height: 11px;
+      background: #1d4ed8;
+      border: 1.5px solid #ffffff;
+      border-radius: 2px;
+      cursor: nwse-resize;
+      z-index: 11;
+    }
+    .floating-text-box.selected .text-resize-handle {
+      display: block;
+    }
+    .floating-text-actions {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      gap: 4px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 2px 5px;
+      font-size: 12px;
+      font-weight: normal;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+      white-space: nowrap;
+      z-index: 10;
+    }
+    .floating-text-box.selected .floating-text-actions {
+      display: inline-flex;
+    }
+    .floating-text-actions span {
+      cursor: pointer;
+      padding: 1px 5px;
+      color: #1e293b;
+    }
+    .floating-text-actions span:hover {
+      background: #e2e8f0;
+      border-radius: 3px;
+    }
+    .floating-text-actions span.del-btn {
+      color: #dc2626;
     }
   </style>
 </head>
@@ -103,7 +436,7 @@
   </aside>
 
   <section id="main">
-    <div id="toolbar">
+    <div class="toolbar">
       <button id="toggle-sidebar">收合圖層</button>
       <span class="toolbar-divider"></span>
       <button id="zoom-out">縮小 (-)</button>
@@ -112,42 +445,1485 @@
       <button id="zoom-150">150%</button>
       <button id="zoom-reset">重設 100%</button>
       <span class="toolbar-divider"></span>
+      <button id="tool-hand-top" title="手抓工具：按住上下左右拖曳移動圖面">🖐 手抓移動</button>
+      <span class="toolbar-divider"></span>
       <button id="layers-check-all">全部勾選</button>
       <button id="layers-uncheck-all">全部取消</button>
     </div>
+
+    <div class="toolbar draw-bar">
+      <strong style="font-size: 13.5px;">繪圖工具：</strong>
+      <button id="tool-none" class="active">瀏覽模式</button>
+      <button id="tool-hand" title="按住圖面上下左右拖曳移動">🖐 手抓移動</button>
+      <button id="tool-pen">隨意畫線</button>
+      <button id="tool-line">直線</button>
+      <button id="tool-arrow">箭頭</button>
+      <button id="tool-circle">圓形</button>
+      <button id="tool-rect">正方形</button>
+      <button id="tool-text">加文字</button>
+
+      <span class="inline-group">
+        <button id="tool-eraser">橡皮擦</button>
+        <input type="range" id="eraser-size" min="8" max="60" value="20" title="橡皮擦大小" />
+        <span id="eraser-size-label">20</span>
+      </span>
+
+      <span class="toolbar-divider"></span>
+
+      <div class="palette-wrapper" id="palette-wrapper">
+        <button type="button" class="palette-trigger" id="palette-trigger" title="開啟調色盤">
+          <span>顏色</span>
+          <span class="palette-swatch-preview" id="palette-preview"></span>
+          <span style="font-size: 10px;">▼</span>
+        </button>
+        <input type="color" id="draw-color" value="#ff0000" style="position:absolute; opacity:0; width:0; height:0; pointer-events:none;" />
+        <div class="palette-popover" id="palette-popover">
+          <div class="palette-auto-row" id="palette-auto-btn">
+            <span class="palette-auto-box"></span>
+            <span>自動(A)</span>
+          </div>
+          <div class="palette-section-title">佈景主題色彩</div>
+          <div class="palette-grid-10" id="palette-theme-top"></div>
+          <div class="palette-shades-grid" id="palette-theme-shades"></div>
+          <div class="palette-section-title">標準色彩</div>
+          <div class="palette-grid-10" id="palette-standard"></div>
+          <div class="palette-more-row" id="palette-more-btn">
+            <span>🎨</span>
+            <span>其他色彩(M)...</span>
+          </div>
+        </div>
+      </div>
+
+      <label class="inline-group">線寬
+        <select id="line-width">
+          <option value="2">細</option>
+          <option value="5" selected>中等</option>
+          <option value="9">粗</option>
+        </select>
+      </label>
+
+      <label class="inline-group">字級(8-36)
+        <input type="number" id="font-size" min="8" max="36" value="20" />
+      </label>
+
+      <button id="draw-undo" disabled>復原上一步</button>
+      <button id="draw-clear">清除筆跡</button>
+      <span class="toolbar-divider"></span>
+      <button id="download-png">下載 PNG</button>
+    </div>
+
+    <div class="toolbar sticker-bar">
+      <strong style="font-size: 13.5px;">向量貼紙區：</strong>
+      <div id="sticker-buttons" style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;"></div>
+      <span class="toolbar-divider"></span>
+      <label class="inline-group">貼紙大小
+        <input type="range" id="sticker-scale" min="0.3" max="3.0" step="0.1" value="1.0" />
+        <span id="sticker-scale-label">1.0x</span>
+      </label>
+    </div>
+
     <div id="viewer-container">
-      <canvas id="pdf-canvas"></canvas>
+      <div id="canvas-stack">
+        <canvas id="pdf-canvas" width="600" height="360"></canvas>
+        <canvas id="draw-canvas" width="600" height="360"></canvas>
+        <svg id="vector-draw-layer" width="600" height="360" viewBox="0 0 600 360" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="eraser-cursor"></div>
+        <div id="overlay-layer" style="width:600px;height:360px;"></div>
+      </div>
     </div>
   </section>
 
-  <script type="module">
-    import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs';
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';
+  <script>
+    const FONT_FAMILY = '"Microsoft JhengHei", "Noto Sans TC", sans-serif';
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const BASE_SCALE = 1.5;
 
-    const PDF_URL = './chart.pdf';
+    // 0.15cm 換算為 96 DPI 螢幕像素（1 inch = 2.54 cm -> 0.15 / 2.54 * 96 ≈ 5.67 px）
+    function getPad015CmPx(zoomRatio = getZoomRatio()) {
+      return (0.15 / 2.54) * 96 * zoomRatio;
+    }
 
-    // 要完全隱藏的開頭數字
-    const HIDDEN_NUMBERS = [90, 16, 54];
+    const THEME_BASE_COLORS = [
+      '#ffffff', '#000000', '#eeece1', '#1f497d', '#4f81bd',
+      '#c0504d', '#9bbb59', '#8064a2', '#4bacc6', '#f79646'
+    ];
+    const THEME_SHADE_COLUMNS = [
+      ['#f2f2f2', '#d9d9d9', '#bfbfbf', '#a6a6a6', '#808080'],
+      ['#7f7f7f', '#595959', '#3f3f3f', '#262626', '#0d0d0d'],
+      ['#ddd9c3', '#c4bd97', '#938953', '#494429', '#1d1b10'],
+      ['#c6d9f0', '#8db3e2', '#548dd4', '#17365d', '#0f243e'],
+      ['#dbe5f1', '#b8cce4', '#95b3d7', '#366092', '#244062'],
+      ['#f2dcdb', '#e5b9b7', '#d99694', '#953734', '#632423'],
+      ['#ebf1dd', '#d7e3bc', '#c3d69b', '#76923c', '#4f6128'],
+      ['#e5e0ec', '#ccc1d9', '#b2a2c7', '#5f497a', '#3f3151'],
+      ['#dbeef3', '#b7dde8', '#92cddc', '#31859b', '#205867'],
+      ['#fdeada', '#fbd5b5', '#fac08f', '#e36c09', '#974806']
+    ];
+    const STANDARD_COLORS = [
+      '#c00000', '#ff0000', '#ffc000', '#ffff00', '#92d050',
+      '#00b050', '#00b0f0', '#0070c0', '#002060', '#7030a0'
+    ];
 
-    let pdfDoc = null;
-    let scale = 1.5; // 預設載入為 150%
-    let optionalContentConfig = null;
-    let renderTask = null;
-    let visibleGroupIds = [];
+    const STICKER_DEFS = [
+      { key: 'wood', label: '木', shape: 'ring', fill: 'none', stroke: '#0000ff', textColor: '#0000ff' },
+      { key: 'fire_wuxing', label: '火', shape: 'ring', fill: 'none', stroke: '#ff0000', textColor: '#ff0000' },
+      { key: 'earth', label: '土', shape: 'ring', fill: 'none', stroke: '#f5b800', textColor: '#f5b800' },
+      { key: 'metal', label: '金', shape: 'ring', fill: 'none', stroke: '#b3b3b3', textColor: '#b3b3b3' },
+      { key: 'water', label: '水', shape: 'ring', fill: 'none', stroke: '#000000', textColor: '#000000' },
+      { key: 'wind', label: '風', shape: 'circle', fill: '#00f0ff', textColor: '#ffffff' },
+      { key: 'cold', label: '寒', shape: 'circle', fill: '#000000', textColor: '#ffffff' },
+      { key: 'summer', label: '暑', shape: 'circle', fill: '#ff00ff', textColor: '#ffffff' },
+      { key: 'damp', label: '濕', shape: 'circle', fill: '#ff8000', textColor: '#ffffff' },
+      { key: 'dry', label: '燥', shape: 'circle', fill: '#a6a6a6', textColor: '#ffffff' },
+      { key: 'fire_xie', label: '火', shape: 'circle', fill: '#ff0000', textColor: '#ffffff' },
+      { key: 'bacteria', label: '細菌', shape: 'oval', fill: 'none', stroke: '#000000', textColor: '#000000' },
+      { key: 'virus', label: '病毒', shape: 'oval', fill: 'none', stroke: '#000000', textColor: '#000000' },
+    ];
+
+    window.__APP_STATE__ = window.__APP_STATE__ || { scale: BASE_SCALE };
+
+    let activeTool = 'none';
+    let isDrawing = false;
+    let penRelPoints = [];
+    let draftVectorShape = null;
+    let hasStrokeMoved = false;
+    const undoStack = [];
+    const MAX_UNDO = 30;
+
+    let vectorShapes = [];
+    let selectedShapeId = null;
+
+    // textItem 支援多行、自訂寬高比例（nw, nh，若為 null 則自動貼合文字大小）
+    let textItems = [];
+    let selectedTextId = null;
+    let draggingTextId = null;
+    let resizingTextId = null;
+    let textDragOffsetX = 0;
+    let textDragOffsetY = 0;
+    let textResizeStartX = 0;
+    let textResizeStartY = 0;
+    let textResizeStartW = 0;
+    let textResizeStartH = 0;
+
+    let stickerItems = [];
+    let selectedStickerId = null;
+    let draggingStickerId = null;
+    let stickerDragOffsetX = 0;
+    let stickerDragOffsetY = 0;
 
     const sidebarEl = document.getElementById('sidebar');
     const toggleSidebarBtn = document.getElementById('toggle-sidebar');
     const canvas = document.getElementById('pdf-canvas');
-    const ctx = canvas.getContext('2d');
-    const layersListEl = document.getElementById('layers-list');
-    const zoomLabelEl = document.getElementById('zoom-label');
+    const drawCanvas = document.getElementById('draw-canvas');
+    const drawCtx = drawCanvas.getContext('2d');
+    const vectorDrawLayerEl = document.getElementById('vector-draw-layer');
+    const eraserCursorEl = document.getElementById('eraser-cursor');
+    const overlayLayerEl = document.getElementById('overlay-layer');
+    const stickerButtonsEl = document.getElementById('sticker-buttons');
+    const stickerScaleInput = document.getElementById('sticker-scale');
+    const stickerScaleLabel = document.getElementById('sticker-scale-label');
     const viewerContainerEl = document.getElementById('viewer-container');
+    const colorInput = document.getElementById('draw-color');
+    const paletteTrigger = document.getElementById('palette-trigger');
+    const palettePreview = document.getElementById('palette-preview');
+    const palettePopover = document.getElementById('palette-popover');
+    const lineWidthSelect = document.getElementById('line-width');
+    const fontSizeInput = document.getElementById('font-size');
+    const eraserSizeInput = document.getElementById('eraser-size');
+    const eraserSizeLabel = document.getElementById('eraser-size-label');
+    const undoBtn = document.getElementById('draw-undo');
+    const clearBtn = document.getElementById('draw-clear');
+    const downloadPngBtn = document.getElementById('download-png');
 
-    toggleSidebarBtn.addEventListener('click', () => {
-      const isCollapsed = sidebarEl.classList.toggle('collapsed');
+    function getCurrentScale() {
+      return window.__APP_STATE__?.scale || BASE_SCALE;
+    }
+
+    function getZoomRatio() {
+      return getCurrentScale() / BASE_SCALE;
+    }
+
+    function getLayerDimensions() {
+      return { w: canvas.width || 600, h: canvas.height || 360 };
+    }
+
+    function pxToRel(x, y) {
+      const { w, h } = getLayerDimensions();
+      return {
+        nx: Math.max(0, Math.min(1, x / w)),
+        ny: Math.max(0, Math.min(1, y / h)),
+      };
+    }
+
+    function relToPx(nx, ny) {
+      const { w, h } = getLayerDimensions();
+      return { x: nx * w, y: ny * h };
+    }
+
+    function setSelectedColor(hex) {
+      colorInput.value = hex;
+      if (palettePreview) palettePreview.style.background = hex;
+      document.querySelectorAll('.palette-cell').forEach((cell) => {
+        cell.classList.toggle('active-color', cell.dataset.color?.toLowerCase() === hex.toLowerCase());
+      });
+      if (selectedTextId !== null) {
+        const target = textItems.find((t) => t.id === selectedTextId);
+        if (target && target.color !== hex) {
+          pushUndoState();
+          target.color = hex;
+          renderOverlays();
+        }
+      }
+      if (selectedShapeId !== null) {
+        const targetShape = vectorShapes.find((s) => s.id === selectedShapeId);
+        if (targetShape && targetShape.color !== hex) {
+          pushUndoState();
+          targetShape.color = hex;
+          renderVectorShapes();
+        }
+      }
+    }
+
+    function initColorPalette() {
+      const themeTopEl = document.getElementById('palette-theme-top');
+      const themeShadesEl = document.getElementById('palette-theme-shades');
+      const standardEl = document.getElementById('palette-standard');
+      if (!themeTopEl || !themeShadesEl || !standardEl) return;
+
+      themeTopEl.innerHTML = '';
+      themeShadesEl.innerHTML = '';
+      standardEl.innerHTML = '';
+
+      const createSwatch = (hex) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'palette-cell';
+        btn.style.background = hex;
+        btn.dataset.color = hex;
+        btn.title = hex;
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setSelectedColor(hex);
+          palettePopover?.classList.remove('open');
+        });
+        return btn;
+      };
+
+      THEME_BASE_COLORS.forEach((hex) => themeTopEl.appendChild(createSwatch(hex)));
+      THEME_SHADE_COLUMNS.forEach((colColors) => {
+        const colDiv = document.createElement('div');
+        colDiv.className = 'palette-shade-col';
+        colColors.forEach((hex) => colDiv.appendChild(createSwatch(hex)));
+        themeShadesEl.appendChild(colDiv);
+      });
+      STANDARD_COLORS.forEach((hex) => standardEl.appendChild(createSwatch(hex)));
+
+      paletteTrigger?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        palettePopover?.classList.toggle('open');
+      });
+
+      document.getElementById('palette-auto-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setSelectedColor('#ff0000');
+        palettePopover?.classList.remove('open');
+      });
+
+      document.getElementById('palette-more-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        palettePopover?.classList.remove('open');
+        colorInput?.click();
+      });
+
+      colorInput?.addEventListener('input', () => {
+        setSelectedColor(colorInput.value);
+      });
+
+      document.addEventListener('click', (e) => {
+        const wrap = document.getElementById('palette-wrapper');
+        if (wrap && !wrap.contains(e.target)) {
+          palettePopover?.classList.remove('open');
+        }
+      });
+
+      setSelectedColor('#ff0000');
+    }
+
+    function createStickerSvgElement(def, itemScale = 1, zoomRatio = getZoomRatio()) {
+      const svg = document.createElementNS(SVG_NS, 'svg');
+      const effectiveScale = itemScale * zoomRatio;
+
+      if (def.shape === 'ring') {
+        const size = Math.max(12, Math.round(72 * effectiveScale));
+        svg.setAttribute('viewBox', '0 0 100 100');
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
+
+        const circle = document.createElementNS(SVG_NS, 'circle');
+        circle.setAttribute('cx', '50');
+        circle.setAttribute('cy', '50');
+        circle.setAttribute('r', '44');
+        circle.setAttribute('fill', def.fill || 'none');
+        circle.setAttribute('stroke', def.stroke || '#000000');
+        circle.setAttribute('stroke-width', '6.5');
+        svg.appendChild(circle);
+
+        const text = document.createElementNS(SVG_NS, 'text');
+        text.setAttribute('x', '50');
+        text.setAttribute('y', '53');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'central');
+        text.setAttribute('fill', def.textColor);
+        text.setAttribute('font-size', '52');
+        text.setAttribute('font-weight', 'bold');
+        text.setAttribute('font-family', FONT_FAMILY);
+        text.textContent = def.label;
+        svg.appendChild(text);
+      } else if (def.shape === 'circle') {
+        const size = Math.max(12, Math.round(68 * effectiveScale));
+        svg.setAttribute('viewBox', '0 0 100 100');
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
+
+        const circle = document.createElementNS(SVG_NS, 'circle');
+        circle.setAttribute('cx', '50');
+        circle.setAttribute('cy', '50');
+        circle.setAttribute('r', '46');
+        circle.setAttribute('fill', def.fill);
+        svg.appendChild(circle);
+
+        const text = document.createElementNS(SVG_NS, 'text');
+        text.setAttribute('x', '50');
+        text.setAttribute('y', '53');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'central');
+        text.setAttribute('fill', def.textColor);
+        text.setAttribute('font-size', '52');
+        text.setAttribute('font-weight', 'bold');
+        text.setAttribute('font-family', FONT_FAMILY);
+        text.textContent = def.label;
+        svg.appendChild(text);
+      } else {
+        const w = Math.max(18, Math.round(112 * effectiveScale));
+        const h = Math.max(12, Math.round(68 * effectiveScale));
+        svg.setAttribute('viewBox', '0 0 160 100');
+        svg.setAttribute('width', w);
+        svg.setAttribute('height', h);
+
+        const ellipse = document.createElementNS(SVG_NS, 'ellipse');
+        ellipse.setAttribute('cx', '80');
+        ellipse.setAttribute('cy', '50');
+        ellipse.setAttribute('rx', '73');
+        ellipse.setAttribute('ry', '42');
+        ellipse.setAttribute('fill', def.fill);
+        ellipse.setAttribute('stroke', def.stroke || '#000000');
+        ellipse.setAttribute('stroke-width', '7');
+        svg.appendChild(ellipse);
+
+        const text = document.createElementNS(SVG_NS, 'text');
+        text.setAttribute('x', '80');
+        text.setAttribute('y', '52');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'central');
+        text.setAttribute('fill', def.textColor);
+        text.setAttribute('font-size', '44');
+        text.setAttribute('font-weight', 'bold');
+        text.setAttribute('font-family', FONT_FAMILY);
+        text.textContent = def.label;
+        svg.appendChild(text);
+      }
+      return svg;
+    }
+
+    function initStickerButtons() {
+      if (!stickerButtonsEl) return;
+      stickerButtonsEl.innerHTML = '';
+      for (const def of STICKER_DEFS) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sticker-btn';
+        btn.title = `加入向量貼紙：${def.label}`;
+        btn.appendChild(createStickerSvgElement(def, 0.42, 1));
+        btn.addEventListener('click', () => {
+          pushUndoState();
+          const currentScale = Math.min(3.0, Math.max(0.3, Number(stickerScaleInput?.value) || 1.0));
+          const offsetIndex = stickerItems.length % 8;
+          const startPxX = (viewerContainerEl?.scrollLeft || 0) + 28 + offsetIndex * 18;
+          const startPxY = (viewerContainerEl?.scrollTop || 0) + 28 + offsetIndex * 18;
+          const rel = pxToRel(startPxX, startPxY);
+          const newSticker = {
+            id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            key: def.key,
+            nx: rel.nx,
+            ny: rel.ny,
+            stickerScale: currentScale,
+          };
+          stickerItems.push(newSticker);
+          selectedStickerId = newSticker.id;
+          selectedTextId = null;
+          selectedShapeId = null;
+          renderOverlays();
+          renderVectorShapes();
+        });
+        stickerButtonsEl.appendChild(btn);
+      }
+    }
+
+    stickerScaleInput?.addEventListener('input', () => {
+      const val = Math.min(3.0, Math.max(0.3, Number(stickerScaleInput.value) || 1.0));
+      if (stickerScaleLabel) stickerScaleLabel.textContent = `${val.toFixed(1)}x`;
+      if (selectedStickerId !== null) {
+        const target = stickerItems.find((s) => s.id === selectedStickerId);
+        if (target) {
+          target.stickerScale = val;
+          renderOverlays();
+        }
+      }
+    });
+
+    function updateEraserCursorSize() {
+      const size = Number(eraserSizeInput?.value || 20);
+      eraserCursorEl.style.width = `${size}px`;
+      eraserCursorEl.style.height = `${size}px`;
+    }
+
+    function updateEraserCursorPosition(x, y) {
+      if (activeTool !== 'eraser') {
+        eraserCursorEl.style.display = 'none';
+        return;
+      }
+      updateEraserCursorSize();
+      eraserCursorEl.style.left = `${x}px`;
+      eraserCursorEl.style.top = `${y}px`;
+      eraserCursorEl.style.display = 'block';
+    }
+
+    eraserSizeInput?.addEventListener('input', () => {
+      if (eraserSizeLabel) eraserSizeLabel.textContent = eraserSizeInput.value;
+      updateEraserCursorSize();
+    });
+
+    function clampFontSize(val) {
+      const num = parseInt(val, 10);
+      if (Number.isNaN(num)) return 20;
+      return Math.min(36, Math.max(8, num));
+    }
+
+    fontSizeInput?.addEventListener('change', () => {
+      const validSize = clampFontSize(fontSizeInput.value);
+      fontSizeInput.value = validSize;
+      if (selectedTextId !== null) {
+        const target = textItems.find((t) => t.id === selectedTextId);
+        if (target && target.fontSize !== validSize) {
+          pushUndoState();
+          target.fontSize = validSize;
+          renderOverlays();
+        }
+      }
+    });
+
+    function cloneVectorShape(shape) {
+      return {
+        ...shape,
+        points: shape.points ? shape.points.map((p) => ({ ...p })) : undefined,
+      };
+    }
+
+    function createSnapshotRecord() {
+      return {
+        canvasDataUrl: drawCanvas.toDataURL('image/png'),
+        shapes: vectorShapes.map(cloneVectorShape),
+        texts: textItems.map((t) => ({ ...t })),
+        stickers: stickerItems.map((s) => ({ ...s })),
+      };
+    }
+
+    function updateUndoButton() {
+      if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+    }
+
+    function pushUndoState() {
+      if (drawCanvas.width === 0 || drawCanvas.height === 0) return;
+      undoStack.push(createSnapshotRecord());
+      if (undoStack.length > MAX_UNDO) undoStack.shift();
+      updateUndoButton();
+    }
+
+    function restoreRecord(record) {
+      return new Promise((resolve) => {
+        vectorShapes = (record.shapes || []).map(cloneVectorShape);
+        textItems = (record.texts || []).map((t) => ({ ...t }));
+        stickerItems = (record.stickers || []).map((s) => ({ ...s }));
+        selectedShapeId = null;
+        selectedTextId = null;
+        selectedStickerId = null;
+        draftVectorShape = null;
+        renderVectorShapes();
+        renderOverlays();
+
+        const img = new Image();
+        img.onload = () => {
+          drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+          drawCtx.drawImage(img, 0, 0, drawCanvas.width, drawCanvas.height);
+          resolve();
+        };
+        img.src = record.canvasDataUrl;
+      });
+    }
+
+    undoBtn?.addEventListener('click', async () => {
+      if (undoStack.length === 0) return;
+      const prevRecord = undoStack.pop();
+      updateUndoButton();
+      await restoreRecord(prevRecord);
+    });
+
+    clearBtn?.addEventListener('click', () => {
+      const hasAnyPixel = drawCtx
+        .getImageData(0, 0, drawCanvas.width || 1, drawCanvas.height || 1)
+        .data.some((alpha) => alpha !== 0);
+      if (hasAnyPixel || vectorShapes.length > 0 || textItems.length > 0 || stickerItems.length > 0) {
+        pushUndoState();
+      }
+      drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+      vectorShapes = [];
+      textItems = [];
+      stickerItems = [];
+      selectedShapeId = null;
+      selectedTextId = null;
+      selectedStickerId = null;
+      draftVectorShape = null;
+      renderVectorShapes();
+      renderOverlays();
+    });
+
+    // ---------------------------------------------------------
+    // 局部精準橡皮擦：將線段中落在橡皮擦半徑內的點/段裁切掉，保留其餘部分
+    // ---------------------------------------------------------
+    function distToSegment(px, py, x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+      let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+    }
+
+    function splitPolylineByEraser(points, px, py, radius) {
+      const { w, h } = getLayerDimensions();
+      if (!Array.isArray(points) || points.length === 0) return { segments: [], modified: false };
+
+      if (points.length === 1) {
+        const p0 = points[0];
+        const hit = Math.hypot(px - p0.nx * w, py - p0.ny * h) <= radius;
+        return hit ? { segments: [], modified: true } : { segments: [[{ ...p0 }]], modified: false };
+      }
+
+      const segments = [];
+      let currentSeg = [];
+      let modified = false;
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const a = points[i];
+        const b = points[i + 1];
+        const ax = a.nx * w;
+        const ay = a.ny * h;
+        const bx = b.nx * w;
+        const by = b.ny * h;
+
+        const aHit = Math.hypot(px - ax, py - ay) <= radius;
+        const bHit = Math.hypot(px - bx, py - by) <= radius;
+        const segHit = distToSegment(px, py, ax, ay, bx, by) <= radius;
+
+        if (!segHit) {
+          if (currentSeg.length === 0) currentSeg.push({ ...a });
+          currentSeg.push({ ...b });
+        } else {
+          modified = true;
+          if (!aHit) {
+            if (currentSeg.length === 0) currentSeg.push({ ...a });
+            if (currentSeg.length > 0) {
+              segments.push(currentSeg);
+              currentSeg = [];
+            }
+          } else if (currentSeg.length > 0) {
+            segments.push(currentSeg);
+            currentSeg = [];
+          }
+          if (!bHit) {
+            currentSeg = [{ ...b }];
+          }
+        }
+      }
+
+      if (currentSeg.length > 0) {
+        segments.push(currentSeg);
+      }
+
+      return { segments, modified };
+    }
+
+    function sampleSegmentPoints(nx1, ny1, nx2, ny2, steps = 28) {
+      const pts = [];
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        pts.push({
+          nx: nx1 + (nx2 - nx1) * t,
+          ny: ny1 + (ny2 - ny1) * t,
+        });
+      }
+      return pts;
+    }
+
+    function sampleRectPoints(nx1, ny1, nx2, ny2) {
+      const minX = Math.min(nx1, nx2);
+      const maxX = Math.max(nx1, nx2);
+      const minY = Math.min(ny1, ny2);
+      const maxY = Math.max(ny1, ny2);
+      return [
+        ...sampleSegmentPoints(minX, minY, maxX, minY, 16),
+        ...sampleSegmentPoints(maxX, minY, maxX, maxY, 16),
+        ...sampleSegmentPoints(maxX, maxY, minX, maxY, 16),
+        ...sampleSegmentPoints(minX, maxY, minX, minY, 16),
+      ];
+    }
+
+    function sampleCirclePoints(nx1, ny1, nx2, ny2, steps = 64) {
+      const rx = Math.abs(nx2 - nx1) / 2;
+      const ry = Math.abs(ny2 - ny1) / 2;
+      const cx = Math.min(nx1, nx2) + rx;
+      const cy = Math.min(ny1, ny2) + ry;
+      const pts = [];
+      for (let i = 0; i <= steps; i++) {
+        const theta = (i / steps) * Math.PI * 2;
+        pts.push({
+          nx: cx + rx * Math.cos(theta),
+          ny: cy + ry * Math.sin(theta),
+        });
+      }
+      return pts;
+    }
+
+    function eraseVectorShapesAt(px, py) {
+      const radius = Number(eraserSizeInput?.value || 20) / 2;
+      if (vectorShapes.length === 0) return false;
+
+      let anyModified = false;
+      const nextShapes = [];
+
+      for (const shape of vectorShapes) {
+        const hitPad = radius + Math.max(2, (shape.lineWidth * getZoomRatio()) / 2);
+
+        if (shape.type === 'pen') {
+          const { segments, modified } = splitPolylineByEraser(shape.points, px, py, hitPad);
+          if (modified) {
+            anyModified = true;
+            segments.forEach((segPts, idx) => {
+              if (segPts.length >= 2) {
+                nextShapes.push({
+                  ...cloneVectorShape(shape),
+                  id: idx === 0 ? shape.id : `${shape.id}_part_${idx}_${Date.now()}`,
+                  points: segPts,
+                });
+              }
+            });
+          } else {
+            nextShapes.push(shape);
+          }
+        } else if (shape.type === 'line' || shape.type === 'arrow') {
+          const pts = sampleSegmentPoints(shape.nx1, shape.ny1, shape.nx2, shape.ny2, 32);
+          const { segments, modified } = splitPolylineByEraser(pts, px, py, hitPad);
+          if (modified) {
+            anyModified = true;
+            segments.forEach((segPts, idx) => {
+              if (segPts.length >= 2) {
+                nextShapes.push({
+                  id: `${shape.id}_seg_${idx}_${Date.now()}`,
+                  type: 'pen',
+                  points: segPts,
+                  lineWidth: shape.lineWidth,
+                  color: shape.color,
+                });
+              }
+            });
+          } else {
+            nextShapes.push(shape);
+          }
+        } else if (shape.type === 'rect') {
+          const pts = sampleRectPoints(shape.nx1, shape.ny1, shape.nx2, shape.ny2);
+          const { segments, modified } = splitPolylineByEraser(pts, px, py, hitPad);
+          if (modified) {
+            anyModified = true;
+            segments.forEach((segPts, idx) => {
+              if (segPts.length >= 2) {
+                nextShapes.push({
+                  id: `${shape.id}_rect_${idx}_${Date.now()}`,
+                  type: 'pen',
+                  points: segPts,
+                  lineWidth: shape.lineWidth,
+                  color: shape.color,
+                });
+              }
+            });
+          } else {
+            nextShapes.push(shape);
+          }
+        } else if (shape.type === 'circle') {
+          const pts = sampleCirclePoints(shape.nx1, shape.ny1, shape.nx2, shape.ny2, 72);
+          const { segments, modified } = splitPolylineByEraser(pts, px, py, hitPad);
+          if (modified) {
+            anyModified = true;
+            segments.forEach((segPts, idx) => {
+              if (segPts.length >= 2) {
+                nextShapes.push({
+                  id: `${shape.id}_arc_${idx}_${Date.now()}`,
+                  type: 'pen',
+                  points: segPts,
+                  lineWidth: shape.lineWidth,
+                  color: shape.color,
+                });
+              }
+            });
+          } else {
+            nextShapes.push(shape);
+          }
+        } else {
+          nextShapes.push(shape);
+        }
+      }
+
+      if (anyModified) {
+        vectorShapes = nextShapes;
+        if (selectedShapeId && !vectorShapes.some((s) => s.id === selectedShapeId)) {
+          selectedShapeId = null;
+        }
+        renderVectorShapes();
+      }
+      return anyModified;
+    }
+
+    function buildVectorShapeNode(shape, zoomRatio = getZoomRatio()) {
+      const { w, h } = getLayerDimensions();
+      const g = document.createElementNS(SVG_NS, 'g');
+      g.classList.add('vector-shape-group');
+      if (shape.id === selectedShapeId) g.classList.add('selected');
+
+      const strokeWidth = Math.max(1, shape.lineWidth * zoomRatio);
+      const color = shape.color;
+
+      if (shape.type === 'pen' && Array.isArray(shape.points) && shape.points.length > 0) {
+        const d = shape.points
+          .map((pt, idx) => `${idx === 0 ? 'M' : 'L'} ${(pt.nx * w).toFixed(1)} ${(pt.ny * h).toFixed(1)}`)
+          .join(' ');
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', color);
+        path.setAttribute('stroke-width', strokeWidth);
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-linejoin', 'round');
+        g.appendChild(path);
+      } else if (shape.type === 'line') {
+        const line = document.createElementNS(SVG_NS, 'line');
+        line.setAttribute('x1', shape.nx1 * w);
+        line.setAttribute('y1', shape.ny1 * h);
+        line.setAttribute('x2', shape.nx2 * w);
+        line.setAttribute('y2', shape.ny2 * h);
+        line.setAttribute('stroke', color);
+        line.setAttribute('stroke-width', strokeWidth);
+        line.setAttribute('stroke-linecap', 'round');
+        g.appendChild(line);
+      } else if (shape.type === 'arrow') {
+        const x1 = shape.nx1 * w;
+        const y1 = shape.ny1 * h;
+        const x2 = shape.nx2 * w;
+        const y2 = shape.ny2 * h;
+        const headLen = Math.max(8, strokeWidth * 3.2);
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+
+        const line = document.createElementNS(SVG_NS, 'line');
+        line.setAttribute('x1', x1);
+        line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
+        line.setAttribute('stroke', color);
+        line.setAttribute('stroke-width', strokeWidth);
+        line.setAttribute('stroke-linecap', 'round');
+        g.appendChild(line);
+
+        const p1x = x2 - headLen * Math.cos(angle - Math.PI / 6);
+        const p1y = y2 - headLen * Math.sin(angle - Math.PI / 6);
+        const p2x = x2 - headLen * Math.cos(angle + Math.PI / 6);
+        const p2y = y2 - headLen * Math.sin(angle + Math.PI / 6);
+
+        const head = document.createElementNS(SVG_NS, 'polygon');
+        head.setAttribute('points', `${x2},${y2} ${p1x.toFixed(1)},${p1y.toFixed(1)} ${p2x.toFixed(1)},${p2y.toFixed(1)}`);
+        head.setAttribute('fill', color);
+        g.appendChild(head);
+      } else if (shape.type === 'circle') {
+        const x1 = shape.nx1 * w;
+        const y1 = shape.ny1 * h;
+        const x2 = shape.nx2 * w;
+        const y2 = shape.ny2 * h;
+        const rx = Math.max(1, Math.abs(x2 - x1) / 2);
+        const ry = Math.max(1, Math.abs(y2 - y1) / 2);
+        const cx = Math.min(x1, x2) + rx;
+        const cy = Math.min(y1, y2) + ry;
+
+        const ellipse = document.createElementNS(SVG_NS, 'ellipse');
+        ellipse.setAttribute('cx', cx);
+        ellipse.setAttribute('cy', cy);
+        ellipse.setAttribute('rx', rx);
+        ellipse.setAttribute('ry', ry);
+        ellipse.setAttribute('fill', 'none');
+        ellipse.setAttribute('stroke', color);
+        ellipse.setAttribute('stroke-width', strokeWidth);
+        g.appendChild(ellipse);
+      } else if (shape.type === 'rect') {
+        const x1 = shape.nx1 * w;
+        const y1 = shape.ny1 * h;
+        const x2 = shape.nx2 * w;
+        const y2 = shape.ny2 * h;
+        const rect = document.createElementNS(SVG_NS, 'rect');
+        rect.setAttribute('x', Math.min(x1, x2));
+        rect.setAttribute('y', Math.min(y1, y2));
+        rect.setAttribute('width', Math.abs(x2 - x1));
+        rect.setAttribute('height', Math.abs(y2 - y1));
+        rect.setAttribute('fill', 'none');
+        rect.setAttribute('stroke', color);
+        rect.setAttribute('stroke-width', strokeWidth);
+        g.appendChild(rect);
+      }
+      return g;
+    }
+
+    function renderVectorShapes() {
+      vectorDrawLayerEl.innerHTML = '';
+      for (const shape of vectorShapes) {
+        const node = buildVectorShapeNode(shape);
+        node.addEventListener('click', (e) => {
+          if (activeTool === 'eraser') {
+            e.stopPropagation();
+            const pt = getStackCoords(e, vectorDrawLayerEl);
+            pushUndoState();
+            eraseVectorShapesAt(pt.x, pt.y);
+            return;
+          }
+          if (activeTool === 'none') {
+            e.stopPropagation();
+            selectedShapeId = selectedShapeId === shape.id ? null : shape.id;
+            selectedTextId = null;
+            selectedStickerId = null;
+            renderVectorShapes();
+            renderOverlays();
+          }
+        });
+        vectorDrawLayerEl.appendChild(node);
+      }
+      if (draftVectorShape) {
+        vectorDrawLayerEl.appendChild(buildVectorShapeNode(draftVectorShape));
+      }
+    }
+
+    window.__APP_STATE__.renderVectorShapes = renderVectorShapes;
+
+    window.addEventListener('keydown', (e) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId !== null) {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        pushUndoState();
+        vectorShapes = vectorShapes.filter((s) => s.id !== selectedShapeId);
+        selectedShapeId = null;
+        renderVectorShapes();
+      }
+    });
+
+    function renderOverlays() {
+      overlayLayerEl.innerHTML = '';
+      const zoomRatio = getZoomRatio();
+      const { w: layerW, h: layerH } = getLayerDimensions();
+      const padPx = getPad015CmPx(zoomRatio);
+
+      for (const sItem of stickerItems) {
+        const def = STICKER_DEFS.find((d) => d.key === sItem.key);
+        if (!def) continue;
+
+        const posPx = relToPx(sItem.nx, sItem.ny);
+        const wrap = document.createElement('div');
+        wrap.className = 'vector-sticker-item' + (sItem.id === selectedStickerId ? ' selected' : '');
+        wrap.style.left = `${posPx.x}px`;
+        wrap.style.top = `${posPx.y}px`;
+        wrap.appendChild(createStickerSvgElement(def, sItem.stickerScale || 1, zoomRatio));
+
+        const delBadge = document.createElement('span');
+        delBadge.className = 'sticker-del-badge';
+        delBadge.textContent = '刪除';
+        delBadge.addEventListener('pointerdown', (e) => e.stopPropagation());
+        delBadge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          pushUndoState();
+          stickerItems = stickerItems.filter((s) => s.id !== sItem.id);
+          if (selectedStickerId === sItem.id) selectedStickerId = null;
+          renderOverlays();
+        });
+        wrap.appendChild(delBadge);
+
+        wrap.addEventListener('pointerdown', (e) => {
+          if (activeTool === 'hand') return;
+          e.stopPropagation();
+          selectedStickerId = sItem.id;
+          selectedTextId = null;
+          selectedShapeId = null;
+          if (stickerScaleInput) stickerScaleInput.value = sItem.stickerScale || 1;
+          if (stickerScaleLabel) stickerScaleLabel.textContent = `${Number(sItem.stickerScale || 1).toFixed(1)}x`;
+          renderOverlays();
+          renderVectorShapes();
+
+          const currentWrap = overlayLayerEl.querySelector('.vector-sticker-item.selected');
+          if (!currentWrap) return;
+
+          pushUndoState();
+          draggingStickerId = sItem.id;
+          const stackRect = overlayLayerEl.getBoundingClientRect();
+          const currentPx = relToPx(sItem.nx, sItem.ny);
+          stickerDragOffsetX = e.clientX - stackRect.left - currentPx.x;
+          stickerDragOffsetY = e.clientY - stackRect.top - currentPx.y;
+          currentWrap.setPointerCapture(e.pointerId);
+        });
+
+        wrap.addEventListener('pointermove', (e) => {
+          if (draggingStickerId !== sItem.id) return;
+          const stackRect = overlayLayerEl.getBoundingClientRect();
+          const nextPxX = Math.max(0, e.clientX - stackRect.left - stickerDragOffsetX);
+          const nextPxY = Math.max(0, e.clientY - stackRect.top - stickerDragOffsetY);
+          const nextRel = pxToRel(nextPxX, nextPxY);
+          sItem.nx = nextRel.nx;
+          sItem.ny = nextRel.ny;
+          wrap.style.left = `${nextPxX}px`;
+          wrap.style.top = `${nextPxY}px`;
+        });
+
+        const stopStickerDrag = (e) => {
+          if (draggingStickerId === sItem.id) {
+            draggingStickerId = null;
+            if (e && wrap.hasPointerCapture(e.pointerId)) wrap.releasePointerCapture(e.pointerId);
+          }
+        };
+        wrap.addEventListener('pointerup', stopStickerDrag);
+        wrap.addEventListener('pointercancel', stopStickerDrag);
+        overlayLayerEl.appendChild(wrap);
+      }
+
+      for (const item of textItems) {
+        const posPx = relToPx(item.nx, item.ny);
+        const scaledFontSize = Math.max(6, Math.round(item.fontSize * zoomRatio));
+
+        const box = document.createElement('div');
+        box.className = 'floating-text-box' + (item.id === selectedTextId ? ' selected' : '');
+        box.style.left = `${posPx.x}px`;
+        box.style.top = `${posPx.y}px`;
+        box.style.padding = `${padPx.toFixed(2)}px`;
+        box.style.color = item.color;
+        box.style.fontSize = `${scaledFontSize}px`;
+        box.style.fontFamily = FONT_FAMILY;
+
+        if (item.nw) {
+          box.style.width = `${Math.max(24, item.nw * layerW)}px`;
+        }
+        if (item.nh) {
+          box.style.height = `${Math.max(20, item.nh * layerH)}px`;
+        }
+
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'floating-text-content';
+        contentSpan.textContent = item.text;
+
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'text-resize-handle';
+        resizeHandle.title = '拖曳調整文字框長與寬';
+
+        const actions = document.createElement('div');
+        actions.className = 'floating-text-actions';
+
+        const fitSpan = document.createElement('span');
+        fitSpan.textContent = '貼合文字';
+        fitSpan.addEventListener('pointerdown', (e) => e.stopPropagation());
+        fitSpan.addEventListener('click', (e) => {
+          e.stopPropagation();
+          pushUndoState();
+          item.nw = null;
+          item.nh = null;
+          renderOverlays();
+        });
+
+        const editSpan = document.createElement('span');
+        editSpan.textContent = '編輯';
+        editSpan.addEventListener('pointerdown', (e) => e.stopPropagation());
+        editSpan.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const updated = prompt('修改文字內容（可用 Enter 換行）：', item.text);
+          if (updated !== null && updated.trim()) {
+            pushUndoState();
+            item.text = updated;
+            renderOverlays();
+          }
+        });
+
+        const delSpan = document.createElement('span');
+        delSpan.className = 'del-btn';
+        delSpan.textContent = '刪除';
+        delSpan.addEventListener('pointerdown', (e) => e.stopPropagation());
+        delSpan.addEventListener('click', (e) => {
+          e.stopPropagation();
+          pushUndoState();
+          textItems = textItems.filter((t) => t.id !== item.id);
+          if (selectedTextId === item.id) selectedTextId = null;
+          renderOverlays();
+        });
+
+        box.appendChild(contentSpan);
+        box.appendChild(resizeHandle);
+        box.appendChild(actions);
+        actions.appendChild(fitSpan);
+        actions.appendChild(editSpan);
+        actions.appendChild(delSpan);
+
+        // 右下角把手：拖曳調整長與寬
+        resizeHandle.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          pushUndoState();
+          resizingTextId = item.id;
+          textResizeStartX = e.clientX;
+          textResizeStartY = e.clientY;
+          const rect = box.getBoundingClientRect();
+          textResizeStartW = rect.width;
+          textResizeStartH = rect.height;
+          resizeHandle.setPointerCapture(e.pointerId);
+        });
+
+        resizeHandle.addEventListener('pointermove', (e) => {
+          if (resizingTextId !== item.id) return;
+          const dx = e.clientX - textResizeStartX;
+          const dy = e.clientY - textResizeStartY;
+          const nextW = Math.max(24, textResizeStartW + dx);
+          const nextH = Math.max(20, textResizeStartH + dy);
+          const { w, h } = getLayerDimensions();
+          item.nw = nextW / w;
+          item.nh = nextH / h;
+          box.style.width = `${nextW}px`;
+          box.style.height = `${nextH}px`;
+        });
+
+        const stopTextResize = (e) => {
+          if (resizingTextId === item.id) {
+            resizingTextId = null;
+            if (e && resizeHandle.hasPointerCapture(e.pointerId)) {
+              resizeHandle.releasePointerCapture(e.pointerId);
+            }
+          }
+        };
+        resizeHandle.addEventListener('pointerup', stopTextResize);
+        resizeHandle.addEventListener('pointercancel', stopTextResize);
+
+        // 文字框本體：拖曳移動位置
+        box.addEventListener('pointerdown', (e) => {
+          if (activeTool === 'hand' || resizingTextId === item.id) return;
+          e.stopPropagation();
+          selectedTextId = item.id;
+          selectedStickerId = null;
+          selectedShapeId = null;
+          if (fontSizeInput) fontSizeInput.value = item.fontSize;
+          renderOverlays();
+          renderVectorShapes();
+
+          const targetBox = overlayLayerEl.querySelector('.floating-text-box.selected');
+          if (!targetBox) return;
+
+          pushUndoState();
+          draggingTextId = item.id;
+          const stackRect = overlayLayerEl.getBoundingClientRect();
+          const currentPx = relToPx(item.nx, item.ny);
+          textDragOffsetX = e.clientX - stackRect.left - currentPx.x;
+          textDragOffsetY = e.clientY - stackRect.top - currentPx.y;
+          targetBox.setPointerCapture(e.pointerId);
+        });
+
+        box.addEventListener('pointermove', (e) => {
+          if (draggingTextId !== item.id) return;
+          const stackRect = overlayLayerEl.getBoundingClientRect();
+          const nextPxX = Math.max(0, e.clientX - stackRect.left - textDragOffsetX);
+          const nextPxY = Math.max(0, e.clientY - stackRect.top - textDragOffsetY);
+          const nextRel = pxToRel(nextPxX, nextPxY);
+          item.nx = nextRel.nx;
+          item.ny = nextRel.ny;
+          box.style.left = `${nextPxX}px`;
+          box.style.top = `${nextPxY}px`;
+        });
+
+        const stopTextDrag = (e) => {
+          if (draggingTextId === item.id) {
+            draggingTextId = null;
+            if (e && box.hasPointerCapture(e.pointerId)) box.releasePointerCapture(e.pointerId);
+          }
+        };
+        box.addEventListener('pointerup', stopTextDrag);
+        box.addEventListener('pointercancel', stopTextDrag);
+        overlayLayerEl.appendChild(box);
+      }
+    }
+
+    window.__APP_STATE__.renderOverlays = renderOverlays;
+
+    overlayLayerEl.addEventListener('pointerdown', (e) => {
+      if (activeTool === 'text' && e.target === overlayLayerEl) {
+        e.stopPropagation();
+        const rect = overlayLayerEl.getBoundingClientRect();
+        const rel = pxToRel(e.clientX - rect.left, e.clientY - rect.top);
+        const content = prompt('請輸入要加入的文字（可多行）：', '');
+        if (content !== null && content.trim()) {
+          pushUndoState();
+          const newText = {
+            id: `txt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            text: content,
+            nx: rel.nx,
+            ny: rel.ny,
+            nw: null,
+            nh: null,
+            fontSize: clampFontSize(fontSizeInput?.value || 20),
+            color: colorInput?.value || '#ff0000',
+          };
+          textItems.push(newText);
+          selectedTextId = newText.id;
+          selectedStickerId = null;
+          selectedShapeId = null;
+          renderOverlays();
+          renderVectorShapes();
+          setTool('none');
+        }
+        return;
+      }
+
+      if (e.target === overlayLayerEl) {
+        selectedTextId = null;
+        selectedStickerId = null;
+        selectedShapeId = null;
+        renderOverlays();
+        renderVectorShapes();
+      }
+    });
+
+    function renderSvgMarkupToContext(svgEl, width, height, targetCtx, x, y) {
+      const xml = new XMLSerializer().serializeToString(svgEl);
+      const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          targetCtx.drawImage(img, x, y, width, height);
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        img.src = url;
+      });
+    }
+
+    downloadPngBtn?.addEventListener('click', async () => {
+      if (canvas.width === 0 || canvas.height === 0) return;
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = canvas.width;
+      exportCanvas.height = canvas.height;
+      const exportCtx = exportCanvas.getContext('2d');
+      const zoomRatio = getZoomRatio();
+      const padPx = getPad015CmPx(zoomRatio);
+
+      exportCtx.drawImage(canvas, 0, 0);
+      exportCtx.drawImage(drawCanvas, 0, 0);
+
+      if (vectorShapes.length > 0) {
+        const tempSvg = document.createElementNS(SVG_NS, 'svg');
+        tempSvg.setAttribute('xmlns', SVG_NS);
+        tempSvg.setAttribute('width', canvas.width);
+        tempSvg.setAttribute('height', canvas.height);
+        tempSvg.setAttribute('viewBox', `0 0 ${canvas.width} ${canvas.height}`);
+        for (const shape of vectorShapes) {
+          tempSvg.appendChild(buildVectorShapeNode(shape, zoomRatio));
+        }
+        await renderSvgMarkupToContext(tempSvg, canvas.width, canvas.height, exportCtx, 0, 0);
+      }
+
+      for (const sItem of stickerItems) {
+        const def = STICKER_DEFS.find((d) => d.key === sItem.key);
+        if (def) {
+          const posPx = relToPx(sItem.nx, sItem.ny);
+          const svgEl = createStickerSvgElement(def, sItem.stickerScale || 1, zoomRatio);
+          await renderSvgMarkupToContext(
+            svgEl,
+            Number(svgEl.getAttribute('width')),
+            Number(svgEl.getAttribute('height')),
+            exportCtx,
+            posPx.x,
+            posPx.y
+          );
+        }
+      }
+
+      for (const item of textItems) {
+        const posPx = relToPx(item.nx, item.ny);
+        const scaledFontSize = Math.max(6, Math.round(item.fontSize * zoomRatio));
+        const lineHeight = scaledFontSize * 1.3;
+        const lines = String(item.text).split('\n');
+
+        exportCtx.save();
+        exportCtx.font = `bold ${scaledFontSize}px ${FONT_FAMILY}`;
+        exportCtx.fillStyle = item.color;
+        exportCtx.textBaseline = 'top';
+        lines.forEach((line, idx) => {
+          exportCtx.fillText(line, posPx.x + padPx, posPx.y + padPx + idx * lineHeight);
+        });
+        exportCtx.restore();
+      }
+
+      const link = document.createElement('a');
+      const now = new Date();
+      const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      link.download = `chart_annotated_${Math.round(getCurrentScale() * 100)}pct_${stamp}.png`;
+      link.href = exportCanvas.toDataURL('image/png');
+      link.click();
+    });
+
+    const toolButtons = {
+      none: document.getElementById('tool-none'),
+      hand: document.getElementById('tool-hand'),
+      pen: document.getElementById('tool-pen'),
+      line: document.getElementById('tool-line'),
+      arrow: document.getElementById('tool-arrow'),
+      circle: document.getElementById('tool-circle'),
+      rect: document.getElementById('tool-rect'),
+      text: document.getElementById('tool-text'),
+      eraser: document.getElementById('tool-eraser'),
+    };
+    const handTopBtn = document.getElementById('tool-hand-top');
+    const VECTOR_SHAPE_TOOLS = ['pen', 'line', 'arrow', 'circle', 'rect'];
+
+    function setTool(toolName) {
+      activeTool = toolName;
+      Object.entries(toolButtons).forEach(([key, btn]) => {
+        if (btn) btn.classList.toggle('active', key === toolName);
+      });
+      if (handTopBtn) handTopBtn.classList.toggle('active', toolName === 'hand');
+
+      const isVectorShapeTool = VECTOR_SHAPE_TOOLS.includes(toolName);
+      vectorDrawLayerEl.classList.toggle('drawing-active', isVectorShapeTool);
+      overlayLayerEl.classList.toggle('text-placing', toolName === 'text');
+      drawCanvas.style.pointerEvents = toolName === 'eraser' ? 'auto' : 'none';
+      viewerContainerEl?.classList.toggle('hand-mode', toolName === 'hand');
+
+      if (toolName === 'eraser') {
+        drawCanvas.style.cursor = 'none';
+        updateEraserCursorSize();
+      } else {
+        eraserCursorEl.style.display = 'none';
+        vectorDrawLayerEl.style.cursor = isVectorShapeTool ? 'crosshair' : 'default';
+      }
+    }
+
+    Object.entries(toolButtons).forEach(([key, btn]) => {
+      if (btn) btn.addEventListener('click', () => setTool(key));
+    });
+    handTopBtn?.addEventListener('click', () => {
+      setTool(activeTool === 'hand' ? 'none' : 'hand');
+    });
+
+    let isHandPanning = false;
+    let handStartX = 0;
+    let handStartY = 0;
+    let handStartScrollLeft = 0;
+    let handStartScrollTop = 0;
+
+    viewerContainerEl?.addEventListener('pointerdown', (e) => {
+      if (activeTool !== 'hand') return;
+      isHandPanning = true;
+      handStartX = e.clientX;
+      handStartY = e.clientY;
+      handStartScrollLeft = viewerContainerEl.scrollLeft;
+      handStartScrollTop = viewerContainerEl.scrollTop;
+      viewerContainerEl.classList.add('hand-grabbing');
+      viewerContainerEl.setPointerCapture(e.pointerId);
+    });
+
+    viewerContainerEl?.addEventListener('pointermove', (e) => {
+      if (!isHandPanning || activeTool !== 'hand') return;
+      viewerContainerEl.scrollLeft = handStartScrollLeft - (e.clientX - handStartX);
+      viewerContainerEl.scrollTop = handStartScrollTop - (e.clientY - handStartY);
+    });
+
+    const stopHandPan = (e) => {
+      if (!isHandPanning) return;
+      isHandPanning = false;
+      viewerContainerEl?.classList.remove('hand-grabbing');
+      if (e && viewerContainerEl?.hasPointerCapture(e.pointerId)) {
+        viewerContainerEl.releasePointerCapture(e.pointerId);
+      }
+    };
+    viewerContainerEl?.addEventListener('pointerup', stopHandPan);
+    viewerContainerEl?.addEventListener('pointercancel', stopHandPan);
+
+    function getStackCoords(e, targetEl) {
+      const rect = targetEl.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    vectorDrawLayerEl.addEventListener('pointerdown', (e) => {
+      if (!VECTOR_SHAPE_TOOLS.includes(activeTool)) return;
+      const { x, y } = getStackCoords(e, vectorDrawLayerEl);
+      const rel = pxToRel(x, y);
+      pushUndoState();
+      isDrawing = true;
+      hasStrokeMoved = false;
+      selectedShapeId = null;
+      vectorDrawLayerEl.setPointerCapture(e.pointerId);
+
+      const lineWidth = Number(lineWidthSelect?.value || 5);
+      const color = colorInput?.value || '#ff0000';
+
+      if (activeTool === 'pen') {
+        penRelPoints = [{ nx: rel.nx, ny: rel.ny }];
+        draftVectorShape = { id: 'draft', type: 'pen', points: penRelPoints, lineWidth, color };
+      } else {
+        draftVectorShape = {
+          id: 'draft',
+          type: activeTool,
+          nx1: rel.nx,
+          ny1: rel.ny,
+          nx2: rel.nx,
+          ny2: rel.ny,
+          lineWidth,
+          color,
+        };
+      }
+      renderVectorShapes();
+    });
+
+    vectorDrawLayerEl.addEventListener('pointermove', (e) => {
+      if (!isDrawing || !draftVectorShape || !VECTOR_SHAPE_TOOLS.includes(activeTool)) return;
+      const { x, y } = getStackCoords(e, vectorDrawLayerEl);
+      const rel = pxToRel(x, y);
+      hasStrokeMoved = true;
+      if (activeTool === 'pen') {
+        penRelPoints.push({ nx: rel.nx, ny: rel.ny });
+        draftVectorShape.points = penRelPoints;
+      } else {
+        draftVectorShape.nx2 = rel.nx;
+        draftVectorShape.ny2 = rel.ny;
+      }
+      renderVectorShapes();
+    });
+
+    function finishVectorDrawing(e) {
+      if (!isDrawing) return;
+      isDrawing = false;
+      if (hasStrokeMoved && draftVectorShape) {
+        const finalized = cloneVectorShape(draftVectorShape);
+        finalized.id = `vec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        vectorShapes.push(finalized);
+      } else if (undoStack.length > 0) {
+        undoStack.pop();
+        updateUndoButton();
+      }
+      draftVectorShape = null;
+      penRelPoints = [];
+      hasStrokeMoved = false;
+      renderVectorShapes();
+      if (e && vectorDrawLayerEl.hasPointerCapture(e.pointerId)) {
+        vectorDrawLayerEl.releasePointerCapture(e.pointerId);
+      }
+    }
+    vectorDrawLayerEl.addEventListener('pointerup', finishVectorDrawing);
+    vectorDrawLayerEl.addEventListener('pointercancel', finishVectorDrawing);
+
+    let isErasing = false;
+    let eraseDidModify = false;
+
+    drawCanvas.addEventListener('pointerdown', (e) => {
+      if (activeTool !== 'eraser') return;
+      const { x, y } = getStackCoords(e, drawCanvas);
+      updateEraserCursorPosition(x, y);
+      pushUndoState();
+      isErasing = true;
+      eraseDidModify = false;
+      drawCanvas.setPointerCapture(e.pointerId);
+      if (eraseVectorShapesAt(x, y)) eraseDidModify = true;
+      drawCtx.beginPath();
+      drawCtx.moveTo(x, y);
+    });
+
+    drawCanvas.addEventListener('pointermove', (e) => {
+      const { x, y } = getStackCoords(e, drawCanvas);
+      updateEraserCursorPosition(x, y);
+      if (!isErasing || activeTool !== 'eraser') return;
+      if (eraseVectorShapesAt(x, y)) eraseDidModify = true;
+      drawCtx.save();
+      drawCtx.globalCompositeOperation = 'destination-out';
+      drawCtx.lineWidth = Number(eraserSizeInput?.value || 20);
+      drawCtx.lineCap = 'round';
+      drawCtx.lineJoin = 'round';
+      drawCtx.lineTo(x, y);
+      drawCtx.stroke();
+      drawCtx.restore();
+      eraseDidModify = true;
+    });
+
+    drawCanvas.addEventListener('pointerleave', () => {
+      eraserCursorEl.style.display = 'none';
+    });
+
+    function finishErasing(e) {
+      if (!isErasing) return;
+      isErasing = false;
+      if (!eraseDidModify && undoStack.length > 0) {
+        undoStack.pop();
+        updateUndoButton();
+      }
+      eraseDidModify = false;
+      if (e && drawCanvas.hasPointerCapture(e.pointerId)) {
+        drawCanvas.releasePointerCapture(e.pointerId);
+      }
+    }
+    drawCanvas.addEventListener('pointerup', finishErasing);
+    drawCanvas.addEventListener('pointercancel', finishErasing);
+
+    toggleSidebarBtn?.addEventListener('click', () => {
+      const isCollapsed = sidebarEl?.classList.toggle('collapsed');
       toggleSidebarBtn.textContent = isCollapsed ? '展開圖層' : '收合圖層';
     });
+
+    initStickerButtons();
+    initColorPalette();
+    setTool('none');
+  </script>
+
+  <script type="module">
+    const PDF_URL = './chart.pdf';
+    const HIDDEN_NUMBERS = [90, 16, 54];
+    const layersListEl = document.getElementById('layers-list');
+    const zoomLabelEl = document.getElementById('zoom-label');
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    const drawCanvas = document.getElementById('draw-canvas');
+    const drawCtx = drawCanvas.getContext('2d');
+    const vectorDrawLayerEl = document.getElementById('vector-draw-layer');
+    const overlayLayerEl = document.getElementById('overlay-layer');
+
+    let pdfDoc = null;
+    let optionalContentConfig = null;
+    let renderTask = null;
+    let visibleGroupIds = [];
 
     function extractLeadingNumber(name) {
       const normalized = String(name || '')
@@ -158,11 +1934,11 @@
     }
 
     function isHiddenLayer(name) {
-      const num = extractLeadingNumber(name);
-      return HIDDEN_NUMBERS.includes(num);
+      return HIDDEN_NUMBERS.includes(extractLeadingNumber(name));
     }
 
     async function renderLayersUI() {
+      if (!layersListEl) return;
       layersListEl.innerHTML = '';
       visibleGroupIds = [];
 
@@ -178,8 +1954,7 @@
       }
 
       for (const [groupId, group] of Object.entries(groups)) {
-        const layerName = group.name || groupId;
-        if (isHiddenLayer(layerName)) {
+        if (isHiddenLayer(group.name || groupId)) {
           optionalContentConfig.setVisibility(groupId, false);
         }
       }
@@ -191,14 +1966,12 @@
           const nameB = b[1].name || b[0];
           const numA = extractLeadingNumber(nameA);
           const numB = extractLeadingNumber(nameB);
-
           if (numA !== numB) return numA - numB;
           return String(nameA).localeCompare(String(nameB), 'zh-Hant');
         });
 
       for (const [groupId, group] of entries) {
         visibleGroupIds.push(groupId);
-
         const label = document.createElement('label');
         label.className = 'layer-item';
 
@@ -223,20 +1996,18 @@
 
     async function setAllLayersVisibility(checked) {
       if (!optionalContentConfig || visibleGroupIds.length === 0) return;
-
       for (const groupId of visibleGroupIds) {
         optionalContentConfig.setVisibility(groupId, checked);
       }
-
-      const checkboxes = layersListEl.querySelectorAll('input[type="checkbox"]');
-      checkboxes.forEach((cb) => {
+      layersListEl?.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
         cb.checked = checked;
       });
-
       await renderPage();
     }
 
     async function renderPage() {
+      const scale = window.__APP_STATE__.scale;
+      if (zoomLabelEl) zoomLabelEl.textContent = `${Math.round(scale * 100)}%`;
       if (!pdfDoc) return;
       if (renderTask) renderTask.cancel();
 
@@ -245,10 +2016,26 @@
 
       canvas.height = viewport.height;
       canvas.width = viewport.width;
-      zoomLabelEl.textContent = `${Math.round(scale * 100)}%`;
 
-      viewerContainerEl.scrollTop = 0;
-      viewerContainerEl.scrollLeft = 0;
+      const prevDrawing = document.createElement('canvas');
+      prevDrawing.width = drawCanvas.width;
+      prevDrawing.height = drawCanvas.height;
+      prevDrawing.getContext('2d').drawImage(drawCanvas, 0, 0);
+
+      drawCanvas.height = viewport.height;
+      drawCanvas.width = viewport.width;
+      drawCtx.drawImage(prevDrawing, 0, 0, drawCanvas.width, drawCanvas.height);
+
+      vectorDrawLayerEl.setAttribute('width', viewport.width);
+      vectorDrawLayerEl.setAttribute('height', viewport.height);
+      vectorDrawLayerEl.setAttribute('viewBox', `0 0 ${viewport.width} ${viewport.height}`);
+      vectorDrawLayerEl.style.width = `${viewport.width}px`;
+      vectorDrawLayerEl.style.height = `${viewport.height}px`;
+      window.__APP_STATE__.renderVectorShapes?.();
+
+      overlayLayerEl.style.width = `${viewport.width}px`;
+      overlayLayerEl.style.height = `${viewport.height}px`;
+      window.__APP_STATE__.renderOverlays?.();
 
       renderTask = page.render({
         canvasContext: ctx,
@@ -259,53 +2046,71 @@
       try {
         await renderTask.promise;
       } catch (err) {
-        if (err?.name !== 'RenderingCancelledException') {
-          console.error(err);
-        }
+        if (err?.name !== 'RenderingCancelledException') console.error(err);
       }
     }
 
-    document.getElementById('zoom-in').addEventListener('click', async () => {
-      scale = Math.min(6.0, +(scale + 0.5).toFixed(2));
+    document.getElementById('zoom-in')?.addEventListener('click', async () => {
+      window.__APP_STATE__.scale = Math.min(6.0, +(window.__APP_STATE__.scale + 0.5).toFixed(2));
       await renderPage();
     });
-
-    document.getElementById('zoom-out').addEventListener('click', async () => {
-      scale = Math.max(0.25, +(scale - 0.5).toFixed(2));
+    document.getElementById('zoom-out')?.addEventListener('click', async () => {
+      window.__APP_STATE__.scale = Math.max(0.25, +(window.__APP_STATE__.scale - 0.5).toFixed(2));
       await renderPage();
     });
-
-    document.getElementById('zoom-150').addEventListener('click', async () => {
-      scale = 1.5;
+    document.getElementById('zoom-150')?.addEventListener('click', async () => {
+      window.__APP_STATE__.scale = 1.5;
       await renderPage();
     });
-
-    document.getElementById('zoom-reset').addEventListener('click', async () => {
-      scale = 1.0;
+    document.getElementById('zoom-reset')?.addEventListener('click', async () => {
+      window.__APP_STATE__.scale = 1.0;
       await renderPage();
     });
-
-    document.getElementById('layers-check-all').addEventListener('click', async () => {
+    document.getElementById('layers-check-all')?.addEventListener('click', async () => {
       await setAllLayersVisibility(true);
     });
-
-    document.getElementById('layers-uncheck-all').addEventListener('click', async () => {
+    document.getElementById('layers-uncheck-all')?.addEventListener('click', async () => {
       await setAllLayersVisibility(false);
     });
 
-    async function init() {
+    async function loadPdfJs() {
+      const cdns = [
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs',
+        'https://unpkg.com/pdfjs-dist@4.6.82/build/pdf.min.mjs',
+      ];
+      for (const url of cdns) {
+        try {
+          const mod = await import(url);
+          mod.GlobalWorkerOptions.workerSrc = url.replace('/pdf.min.mjs', '/pdf.worker.min.mjs');
+          return mod;
+        } catch (_) {}
+      }
+      throw new Error('無法載入 PDF.js 函式庫，請檢查網路連線。');
+    }
+
+    async function initPdf() {
       try {
-        pdfDoc = await pdfjsLib.getDocument(PDF_URL).promise;
-        optionalContentConfig = await pdfDoc.getOptionalContentConfig();
+        const pdfjsLib = await loadPdfJs();
+        const loadingTask = pdfjsLib.getDocument(PDF_URL);
+        pdfDoc = await loadingTask.promise;
+
+        try {
+          optionalContentConfig = await pdfDoc.getOptionalContentConfig();
+        } catch (_) {
+          optionalContentConfig = null;
+        }
+
         await renderLayersUI();
         await renderPage();
       } catch (err) {
-        layersListEl.textContent = '載入失敗，請確認 chart.pdf 是否與 index.html 在同一層。';
+        if (layersListEl) {
+          layersListEl.textContent = `載入失敗：${err?.message || '請確認 chart.pdf 是否在同一層'}`;
+        }
         console.error(err);
       }
     }
 
-    init();
+    initPdf();
   </script>
 </body>
 </html>
